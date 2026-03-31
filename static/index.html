@@ -179,7 +179,7 @@ main { flex: 1; display: flex; overflow: hidden; }
 .dash-tab:hover { color: var(--text); }
 .dash-tab.active { color: var(--accent-light); font-weight: 600; }
 .dash-tab.active::after {
-  content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background: var(--accent-light); border-radius: 3px 3px 0 0; shadow: 0 -2px 8px var(--accent-glow);
+  content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background: var(--accent-light); border-radius: 3px 3px 0 0; box-shadow: 0 -2px 8px var(--accent-glow);
 }
 
 /* Tab contents */
@@ -365,6 +365,7 @@ main { flex: 1; display: flex; overflow: hidden; }
       <div class="dash-tabs">
         <div class="dash-tab active" onclick="switchTab('tab-operaciones', this)">Operaciones</div>
         <div class="dash-tab" onclick="switchTab('tab-analitica', this)">Analítica & Flujo</div>
+        <div class="dash-tab" onclick="switchTab('tab-proyecciones', this)">Proyecciones</div>
       </div>
 
       <!-- TABS: OPERACIONES -->
@@ -464,6 +465,28 @@ main { flex: 1; display: flex; overflow: hidden; }
         <div class="cat-breakdown" id="cat-breakdown" style="padding: 20px 0;"></div>
 
       </div>
+
+      <!-- TABS: PROYECCIONES -->
+      <div class="tab-content" id="tab-proyecciones">
+        <div class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Proyecciones y Planeación Futura
+        </div>
+
+        <div class="metrics-grid" style="grid-template-columns: repeat(2, 1fr);">
+           <div class="metric-card">
+              <div class="m-icon ic-ing" style="background:var(--yellow-dim)">🔮</div>
+              <div class="m-label">Ingresos Esperados (Pendientes)</div>
+              <div class="m-value" id="val-proy-total" style="color:var(--yellow)">— COP</div>
+              <div class="m-sub" id="sub-proy-count"></div>
+           </div>
+        </div>
+
+        <div class="log-section">
+          <div class="log-title">Línea de tiempo de ingresos esperados</div>
+          <div id="proy-list"></div>
+        </div>
+      </div>
     </section>
   </main>
 </div>
@@ -533,7 +556,7 @@ async function refreshData(silent = false) {
   await Promise.all([
     api('GET', '/api/resumen' + mesQuery).then(r => { S.resumen = r; renderMetricas(); }),
     api('GET', '/api/movimientos' + mesQuery).then(r => { S.movimientos = r; renderLog(); }),
-    api('GET', '/api/analytics' + mesQuery).then(r => { renderCharts(r); })
+    api('GET', '/api/analytics' + mesQuery).then(r => { renderCharts(r); renderProyecciones(r.proyecciones); })
   ]);
 }
 
@@ -633,14 +656,18 @@ function renderCharts(data) {
 
   // 4. Radar de Perfil
   const ctxRadar = document.getElementById('chart-radar').getContext('2d');
-  const catNames = data.radar_categorias.length ? data.radar_categorias : ['A', 'B', 'C'];
-  const catIngs = catNames.map(c => data.por_categoria[c] || 0); // Todo lo que esté entra aquí, pero proyecciones no (si filtramos bien)
+  const catNames = data.radar.categorias.length ? data.radar.categorias : ['A', 'B', 'C'];
+  const catIngs = data.radar.ingresos.length ? data.radar.ingresos : [1, 1, 1];
+  const catEgrs = data.radar.egresos.length ? data.radar.egresos : [1, 1, 1];
   
   chartRadar = new Chart(ctxRadar, {
     type: 'radar',
     data: {
       labels: catNames,
-      datasets: [{ label: 'Volumen Transaccional COP', data: catIngs, backgroundColor: 'rgba(46, 204, 113, 0.2)', borderColor: '#2ECC71', pointBackgroundColor: '#2ECC71' }]
+      datasets: [
+        { label: 'Ingresos', data: catIngs, backgroundColor: 'rgba(46, 204, 113, 0.2)', borderColor: '#2ECC71', pointBackgroundColor: '#2ECC71' },
+        { label: 'Egresos', data: catEgrs, backgroundColor: 'rgba(231, 76, 60, 0.2)', borderColor: '#E74C3C', pointBackgroundColor: '#E74C3C' }
+      ]
     },
     options: { responsive: true, maintainAspectRatio: false, scales: { r: { grid: { color: 'rgba(255,255,255,0.1)' }, angleLines: { color: 'rgba(255,255,255,0.1)' }, pointLabels: { color: '#9CA3AF' }, ticks: { display: false } } } }
   });
@@ -663,6 +690,26 @@ function renderCharts(data) {
 }
 
 // ─── Render UI ───
+function renderProyecciones(proy) {
+  document.getElementById('val-proy-total').textContent = '+' + fmtCOP(proy.total);
+  document.getElementById('sub-proy-count').textContent = proy.count + ' operacion(es) pendientes';
+  
+  const list = document.getElementById('proy-list');
+  if (!proy.lista || !proy.lista.length) {
+    list.innerHTML = `<div class="empty-state">
+      <p>No tienes proyecciones ni cuentas por cobrar registradas en este mes.</p></div>`;
+    return;
+  }
+  list.innerHTML = proy.lista.map(m => {
+    const amtStr = m.moneda === 'USD' ? '+$' + m.monto_original + ' USD' : '+' + fmtCOP(m.monto_cop);
+    return `<div class="log-item">
+      <span class="badge badge-proyeccion">Esperado</span>
+      <span class="log-desc" title="${escapeHtml(m.descripcion)}">${escapeHtml(m.descripcion)}</span>
+      <span class="log-amt" style="color:var(--yellow)">${amtStr}</span>
+      <button class="btn-del" onclick="eliminar('${m.id}')" title="Eliminar">×</button>
+      </div>`;
+  }).join('');
+}
 function renderMetricas() {
   if (!S.resumen) return; const r = S.resumen;
   document.getElementById('val-caja').textContent = fmtCOP(r.neto_cop);

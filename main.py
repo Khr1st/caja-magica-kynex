@@ -208,29 +208,27 @@ async def exportar(mes: str = Query(default=None)):
 
 @app.get("/api/analytics")
 async def analytics(mes: str = Query(default=None)):
-    """Datos estructurados para gráficos: barras, torta, radar, tendencia diaria."""
+    """Datos estructurados para gráficos gráficos y radar separados por tipo."""
     mes = mes or _mes_actual()
     movimientos = cargar_movimientos()
     del_mes = [m for m in movimientos if m.get("mes") == mes]
 
     # Por tipo (para barras)
     por_tipo: dict[str, int] = {}
+    ing_por_cat: dict[str, int] = {}
+    egr_por_cat: dict[str, int] = {}
+
     for m in del_mes:
         t = m.get("tipo", "otro")
-        por_tipo[t] = por_tipo.get(t, 0) + m.get("monto_cop", 0)
-
-    # Por categoría (para torta + radar)
-    por_categoria: dict[str, int] = {}
-    for m in del_mes:
+        monto = m.get("monto_cop", 0)
         cat = m.get("categoria", "otro")
-        por_categoria[cat] = por_categoria.get(cat, 0) + m.get("monto_cop", 0)
-
-    # Egresos por categoría (para torta de gastos)
-    egresos_por_cat: dict[str, int] = {}
-    for m in del_mes:
-        if m.get("tipo") in ("egreso",):
-            cat = m.get("categoria", "otro")
-            egresos_por_cat[cat] = egresos_por_cat.get(cat, 0) + m.get("monto_cop", 0)
+        
+        por_tipo[t] = por_tipo.get(t, 0) + monto
+        
+        if t == "ingreso":
+            ing_por_cat[cat] = ing_por_cat.get(cat, 0) + monto
+        elif t == "egreso":
+            egr_por_cat[cat] = egr_por_cat.get(cat, 0) + monto
 
     # Tendencia diaria acumulada (para gráfico de líneas)
     daily: dict[str, dict[str, int]] = {}
@@ -264,15 +262,16 @@ async def analytics(mes: str = Query(default=None)):
         proy_por_cat[cat] = proy_por_cat.get(cat, 0) + m.get("monto_cop", 0)
 
     # Radar de categorías (todas)
-    todas_cats = list(set(
-        list(por_categoria.keys()) + list(egresos_por_cat.keys())
-    ))
+    todas_cats = list(set(list(ing_por_cat.keys()) + list(egr_por_cat.keys())))
+
+    # Combinado general para la leyenda de resumen
+    por_categoria = {c: ing_por_cat.get(c, 0) + egr_por_cat.get(c, 0) for c in todas_cats}
 
     return {
         "mes": mes,
         "por_tipo": por_tipo,
         "por_categoria": por_categoria,
-        "egresos_por_categoria": egresos_por_cat,
+        "egresos_por_categoria": egr_por_cat,
         "tendencia": {
             "dias": dias,
             "ingresos": ingresos_diarios,
@@ -280,11 +279,16 @@ async def analytics(mes: str = Query(default=None)):
             "acumulado": acumulado,
         },
         "proyecciones": {
+            "lista": proyecciones,
             "por_categoria": proy_por_cat,
             "total": sum(proy_por_cat.values()),
             "count": len(proyecciones),
         },
-        "radar_categorias": todas_cats,
+        "radar": {
+            "categorias": todas_cats,
+            "ingresos": [ing_por_cat.get(c, 0) for c in todas_cats],
+            "egresos": [egr_por_cat.get(c, 0) for c in todas_cats],
+        },
         "total_movimientos": len(del_mes),
     }
 
