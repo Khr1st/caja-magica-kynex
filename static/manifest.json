@@ -1,0 +1,14 @@
+{
+  "name": "Caja Mágica — KYNEX",
+  "short_name": "Caja Mágica",
+  "description": "Tesorería personal de Kent Díaz / KYNEX Ventures",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F1117",
+  "theme_color": "#1A4731",
+  "orientation": "portrait-primary",
+  "icons": [
+    {"src": "/static/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml"},
+    {"src": "/static/icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml"}
+  ]
+}
