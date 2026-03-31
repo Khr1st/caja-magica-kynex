@@ -266,6 +266,19 @@ main { flex: 1; display: flex; overflow: hidden; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; color: var(--text3); }
 .empty-icon { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.4; }
 
+/* Calendar */
+.cal-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; color: var(--text3); font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 10px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.cal-cell { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); min-height: 90px; padding: 6px; display: flex; flex-direction: column; gap: 4px; backdrop-filter: blur(12px); overflow: hidden; transition: var(--transition); }
+.cal-cell:hover { border-color: var(--glass-border); background: var(--surface2); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.cal-empty { background: transparent; border: none; backdrop-filter: none; box-shadow: none; pointer-events: none; }
+.cal-day-num { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 4px; align-self: flex-end; opacity: 0.8; }
+.cal-pill { font-size: 10.5px; padding: 3px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; letter-spacing: -0.2px; text-align: left; }
+.cal-pill.ing { background: var(--green-dim); color: var(--green); }
+.cal-pill.egr { background: var(--red-dim); color: var(--red); }
+.cal-pill.proy-in { background: var(--yellow-dim); color: var(--yellow); border: 1px dashed rgba(241,196,15,0.4); }
+.cal-pill.proy-out { background: rgba(231,76,60,0.1); color: var(--red); border: 1px dashed rgba(231,76,60,0.4); }
+
 /* ─── Modal ─── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 200; animation: fadeIn 0.2s ease; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -366,6 +379,7 @@ main { flex: 1; display: flex; overflow: hidden; }
         <div class="dash-tab active" onclick="switchTab('tab-operaciones', this)">Operaciones</div>
         <div class="dash-tab" onclick="switchTab('tab-analitica', this)">Analítica & Flujo</div>
         <div class="dash-tab" onclick="switchTab('tab-proyecciones', this)">Proyecciones</div>
+        <div class="dash-tab" onclick="switchTab('tab-calendario', this)">Calendario</div>
       </div>
 
       <!-- TABS: OPERACIONES -->
@@ -487,6 +501,20 @@ main { flex: 1; display: flex; overflow: hidden; }
           <div id="proy-list"></div>
         </div>
       </div>
+
+      <!-- TABS: CALENDARIO -->
+      <div class="tab-content" id="tab-calendario">
+        <div class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Calendario de Caja Mensual
+        </div>
+        
+        <div class="cal-header">
+           <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div style="height:40px; flex-shrink:0;"></div> <!-- Footer breather space -->
+      </div>
     </section>
   </main>
 </div>
@@ -555,7 +583,7 @@ async function refreshData(silent = false) {
   const mesQuery = S.mesActualFiltro ? '?mes=' + S.mesActualFiltro : '';
   await Promise.all([
     api('GET', '/api/resumen' + mesQuery).then(r => { S.resumen = r; renderMetricas(); }),
-    api('GET', '/api/movimientos' + mesQuery).then(r => { S.movimientos = r; renderLog(); }),
+    api('GET', '/api/movimientos' + mesQuery).then(r => { S.movimientos = r; renderLog(); renderCalendar(); }),
     api('GET', '/api/analytics' + mesQuery).then(r => { renderCharts(r); renderProyecciones(r.proyecciones); })
   ]);
 }
@@ -776,6 +804,72 @@ function renderLog() {
       <button class="btn-del" onclick="eliminar('${m.id}')" title="Eliminar">×</button>
       </div>`;
   }).join('');
+}
+
+// ─── Calendario ───
+function renderCalendar() {
+  if (!S.mesActualFiltro) return;
+  const grid = document.getElementById('cal-grid');
+  const [y, mStr] = S.mesActualFiltro.split('-');
+  const year = parseInt(y), month = parseInt(mStr) - 1;
+  const dFirst = new Date(year, month, 1);
+  const dLast = new Date(year, month + 1, 0);
+  
+  let firstDayIdx = dFirst.getDay() || 7; // 1 (Mon) to 7 (Sun)
+  
+  let html = '';
+  // Empty cells
+  for(let i=1; i<firstDayIdx; i++) {
+    html += '<div class="cal-cell cal-empty"></div>';
+  }
+  
+  // Group movements by day
+  const opsByDay = {};
+  S.movimientos.forEach(mov => {
+    if(!mov.timestamp) return;
+    const d = new Date(mov.timestamp);
+    const day = d.getDate();
+    if(!opsByDay[day]) opsByDay[day] = [];
+    opsByDay[day].push(mov);
+  });
+  
+  const fmtSmall = (mov) => {
+    if(mov.moneda === 'USD') return mov.monto_original + 'USD';
+    let s = fmtCOP(mov.monto_cop).replace(/COP|[^0-9.]/gi, '').trim();
+    if(s.length > 5 && s.endsWith('.000')) { s = s.slice(0, -4) + 'k'; }
+    return s;
+  };
+
+  for(let d=1; d<=dLast.getDate(); d++) {
+    let cellItems = '';
+    const items = opsByDay[d] || [];
+    
+    // Sort array so projections are at bottom or income at top (optional, currently chronological descending from endpoint)
+    items.forEach(mov => {
+       const isEgrProy = mov.tipo === 'proyeccion_egreso';
+       const isIngProy = mov.tipo === 'proyeccion_ingreso';
+       const isEgr = mov.tipo === 'egreso';
+       
+       let cClass = 'ing';
+       let pfx = '+';
+       if(isEgr) { cClass = 'egr'; pfx = '-'; }
+       else if(isIngProy) { cClass = 'proy-in'; pfx = '+'; }
+       else if(isEgrProy) { cClass = 'proy-out'; pfx = '-'; }
+       else if(mov.tipo === 'ahorro') { cClass = 'ing'; pfx = '~'; }
+       
+       const amtStr = pfx + fmtSmall(mov);
+       const titleTxt = (mov.descripcion || '') + ' (' + fmtCOP(mov.monto_cop).trim() + ')';
+       
+       cellItems += `<div class="cal-pill ${cClass}" title="${escapeHtml(titleTxt)}">${amtStr}</div>`;
+    });
+    
+    html += `<div class="cal-cell">
+       <div class="cal-day-num">${d}</div>
+       ${cellItems}
+    </div>`;
+  }
+  
+  grid.innerHTML = html;
 }
 
 // ─── Helpers ───
