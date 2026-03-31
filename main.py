@@ -25,8 +25,24 @@ BASE_DIR = Path(__file__).parent
 DATA_FILE = BASE_DIR / "data" / "movimientos.json"
 DATA_FILE.parent.mkdir(exist_ok=True)
 
+try:
+    from database import SessionLocal, MovimientoDB, ConfigDB, execute_migrations_if_needed
+    execute_migrations_if_needed()
+except Exception as e:
+    print(f"Error initializing DB: {e}")
+
 TASA_COP_USD: int = int(os.environ.get("TASA_COP_USD", 4200))
 CAJA_MINIMA_COP: int = int(os.environ.get("CAJA_MINIMA_COP", 800_000))
+
+try:
+    with SessionLocal() as _db:
+        _cfg = _db.query(ConfigDB).filter(ConfigDB.id == "global").first()
+        if _cfg:
+            if _cfg.tasa_cop_usd: TASA_COP_USD = _cfg.tasa_cop_usd
+            if _cfg.caja_minima_cop: CAJA_MINIMA_COP = _cfg.caja_minima_cop
+except Exception:
+    pass
+
 
 
 # ─── Modelos ────────────────────────────────────────────────────────────────
@@ -40,23 +56,42 @@ class ConfigUpdate(BaseModel):
     caja_minima_cop: Optional[int] = None
 
 
-# ─── Persistencia ───────────────────────────────────────────────────────────
+# ─── Persistencia (Postgres/SQLAlchemy) ───────────────────────────────────
 
 def cargar_movimientos() -> list:
-    """Lee movimientos desde disco. Retorna [] si no existe o hay error."""
+    """Lee movimientos desde la Base de Datos. Funciona como puente DTO."""
     try:
-        if DATA_FILE.exists():
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        pass
-    return []
+        with SessionLocal() as db:
+            movs = db.query(MovimientoDB).order_by(MovimientoDB.timestamp.asc()).all()
+            return [
+                {
+                    "id": m.id,
+                    "timestamp": m.timestamp,
+                    "mes": m.mes,
+                    "texto_original": m.texto_original,
+                    "tipo": m.tipo,
+                    "categoria": m.categoria,
+                    "descripcion": m.descripcion,
+                    "monto_cop": m.monto_cop,
+                    "monto_original": m.monto_original,
+                    "moneda": m.moneda,
+                    "es_proyeccion": m.es_proyeccion,
+                    "confianza": m.confianza,
+                }
+                for m in movs
+            ]
+    except Exception:
+        return []
 
-
-def guardar_movimientos(lista: list) -> None:
-    """Persiste la lista de movimientos en JSON."""
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(lista, f, indent=2, ensure_ascii=False)
+def guardar_movimiento_db(m_dict: dict) -> None:
+    """Persiste UN solo movimiento insert/update en la BD."""
+    try:
+        with SessionLocal() as db:
+            m = MovimientoDB(**m_dict)
+            db.merge(m)
+            db.commit()
+    except Exception as e:
+        print(f"Error DB insert: {e}")
 
 
 def _mes_actual() -> str:
@@ -103,9 +138,7 @@ async def crear_movimiento(entrada: EntradaTexto):
         "confianza": resultado.confianza,
     }
 
-    movimientos = cargar_movimientos()
-    movimientos.append(movimiento)
-    guardar_movimientos(movimientos)
+    guardar_movimiento_db(movimiento)
     _sync_excel()
 
     return {"ok": True, "movimiento": movimiento, "mensaje": resultado.mensaje_respuesta}
@@ -180,16 +213,14 @@ async def resumen(mes: str = Query(default=None)):
 
 @app.delete("/api/movimiento/{mov_id}")
 async def eliminar_movimiento(mov_id: str):
-    movimientos = cargar_movimientos()
-    original_len = len(movimientos)
-    movimientos = [m for m in movimientos if m.get("id") != mov_id]
-
-    if len(movimientos) == original_len:
-        raise HTTPException(status_code=404, detail="Movimiento no encontrado")
-
-    guardar_movimientos(movimientos)
+    try:
+        with SessionLocal() as db:
+            db.query(MovimientoDB).filter(MovimientoDB.id == mov_id).delete()
+            db.commit()
+    except Exception:
+        pass
     _sync_excel()
-    return {"ok": True, "eliminado": mov_id}
+    return {"ok": True}
 
 
 @app.get("/api/exportar")
@@ -322,6 +353,20 @@ async def update_config(cfg: ConfigUpdate):
         TASA_COP_USD = cfg.tasa_cop_usd
     if cfg.caja_minima_cop is not None:
         CAJA_MINIMA_COP = cfg.caja_minima_cop
+        
+    try:
+        with SessionLocal() as db:
+            obj = db.query(ConfigDB).filter(ConfigDB.id == "global").first()
+            if not obj:
+                obj = ConfigDB(id="global", tasa_cop_usd=TASA_COP_USD, caja_minima_cop=CAJA_MINIMA_COP)
+                db.add(obj)
+            else:
+                obj.tasa_cop_usd = TASA_COP_USD
+                obj.caja_minima_cop = CAJA_MINIMA_COP
+            db.commit()
+    except Exception:
+        pass
+        
     return {"tasa_cop_usd": TASA_COP_USD, "caja_minima_cop": CAJA_MINIMA_COP}
 
 
