@@ -5,7 +5,7 @@ usando regex + heurísticas. Sin dependencias externas.
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 TASA_COP_USD: int = 4200
@@ -60,8 +60,9 @@ _REGLAS: list[dict] = [
         "mensaje": "Proyección de venta digital anotada.",
     },
     {
+        # Bug #6 fix: eliminado \bdebo\b (demasiado ambiguo como modal)
         "nombre": "proyeccion_egreso",
-        "pattern": r"voy a pagar|tengo que pagar|debo pagar|pr[oó]ximo pago|factura pendiente|debo\b|deuda|saldo pendiente",
+        "pattern": r"voy a pagar|tengo que pagar|debo pagar|pr[oó]ximo pago|factura pendiente|deuda|saldo pendiente",
         "tipo": "proyeccion_egreso",
         "categoria": "otro",
         "es_proyeccion": True,
@@ -76,8 +77,10 @@ _REGLAS: list[dict] = [
         "mensaje": "Proyección de ingreso registrada. Confirma cuando sea real.",
     },
     {
+        # Bug #3 fix: eliminados verbos genéricos (transfirieron, me mandaron, etc.)
+        # que colisionaban con ingresos freelance y otros. Solo términos familiares.
         "nombre": "ingreso_mesada",
-        "pattern": r"pap[aá]|mam[aá]|papa|mama|padres|familia|mesada|mandaron|pasaron|transfirieron|depositaron|me dieron|me mandaron",
+        "pattern": r"pap[aá]|mam[aá]|\bpapa\b|\bmama\b|padres|familia|mesada",
         "tipo": "ingreso",
         "categoria": "mesada",
         "mensaje": "Ingreso familiar registrado.",
@@ -97,8 +100,19 @@ _REGLAS: list[dict] = [
         "mensaje": "Venta digital registrada.",
     },
     {
+        # Bug #4 fix: nueva regla que captura verbos de ingreso genéricos
+        # antes de que el fallback los clasifique erroneamente como egreso.
+        "nombre": "ingreso_general",
+        "pattern": r"recib[ií]|me lleg[oó]|me ca[iy][oó]|entr[oó]|me mandaron|me mand[oó]|me pasaron|me pas[oó]|me depositaron|me deposit[oó]|me transfirieron|me dieron|me dio\b",
+        "tipo": "ingreso",
+        "categoria": "otro",
+        "mensaje": "Ingreso registrado. Cuéntame más si quieres una categoría específica (freelance, venta, mesada...).",
+    },
+    {
+        # Bug #7 fix: eliminado 'bancolombia' como señal única de pago de tarjeta.
+        # Bancolombia es el banco, no sinónimo de TC. Solo tarjeta/tc/crédito disparan esta categoría.
         "nombre": "egreso_tarjeta",
-        "pattern": r"tarjeta|bancolombia|\btc\b|cr[eé]dito|pago de tarjeta",
+        "pattern": r"tarjeta|\btc\b|cr[eé]dito|pago de tarjeta",
         "tipo": "egreso",
         "categoria": "tc_pago",
         "mensaje": "Pago de tarjeta registrado. Bien hecho pagarlo completo — así se construye historial sin pagar intereses.",
@@ -131,56 +145,66 @@ def _extraer_monto(texto: str) -> tuple[float, str]:
     """
     Extrae monto y moneda del texto.
     Retorna (monto, moneda). monto=0 si no se encuentra.
-    Orden de prioridad según spec.
     """
     t = texto.lower().replace(",", ".")
 
     # 1. USD con sufijo: 25 usd, 25 dólares
-    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:usd|d[oó]lares|dolares|dolar|d[oó]lar)", t)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:usd|d[oó]lares?|dolares?|d[oó]lar)", t)
     if m:
         return float(m.group(1)), "USD"
 
     # 2. USD con prefijo $: $25 usd
-    m = re.search(r"\$\s*(\d+(?:\.\d+)?)\s*(?:usd|dolares|d[oó]lares)", t)
+    m = re.search(r"\$\s*(\d+(?:\.\d+)?)\s*(?:usd|dolares?|d[oó]lares?)", t)
     if m:
         return float(m.group(1)), "USD"
 
-    # 3. COP millones: 1.5 millones
-    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:millones?|millon)", t)
+    # 3. COP millones — Bug #1 fix: añadido "palos?" | Bug #2 fix: mill[oó]n con acento
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:mill[oó]n(?:es)?|millon(?:es)?|palos?)", t)
     if m:
         return float(m.group(1)) * 1_000_000, "COP"
 
-    # 4. COP miles k/mil: 900k, 40 mil
-    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:k|mil)\b", t)
+    # 4. COP miles — Bug #1 fix: añadido lucas? y lks?
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:k|mil|lucas?|lks?)\b", t)
     if m:
         return float(m.group(1)) * 1_000, "COP"
 
-    # 5. COP formato colombiano: $900.000
+    # 5. COP formato colombiano con $: $900.000
     m = re.search(r"\$\s*(\d{1,3}(?:\.\d{3})+)", t)
     if m:
         valor_str = m.group(1).replace(".", "")
         return float(valor_str), "COP"
 
-    # 6. COP plano con pesos: 900.000 pesos
+    # 6. COP plano con separador de miles: 900.000 pesos
     m = re.search(r"(\d{1,3}(?:\.\d{3})+)\s*(?:pesos?|cop)?", t)
     if m:
         valor_str = m.group(1).replace(".", "")
         return float(valor_str), "COP"
 
-    # 7. COP número largo sin sufijo: 900000
+    # 7. COP número largo sin sufijo — Bug #5 fix: excluir años (1900-2099)
     m = re.search(r"\b(\d{4,})\b", t)
     if m:
-        return float(m.group(1)), "COP"
+        val = float(m.group(1))
+        if not (1900 <= val <= 2099):
+            return val, "COP"
+
+    # 8. Número corto sin sufijo — último recurso para valores como 50, 100, 3.5
+    m = re.search(r"\b(\d{1,3}(?:\.\d+)?)\b", t)
+    if m:
+        val = float(m.group(1))
+        if val > 0:
+            return val, "COP"
 
     return 0, "COP"
 
 
-def clasificar(texto: str) -> ResultadoClasificacion:
+def clasificar(texto: str, moneda_forzada: Optional[str] = None) -> ResultadoClasificacion:
     """
     Clasifica un texto libre en un movimiento financiero.
 
     Args:
         texto: Texto en lenguaje natural describiendo un movimiento.
+        moneda_forzada: 'USD' o 'COP'. Si es 'USD' y el texto no especifica
+                        explícitamente la moneda, el monto se trata como USD.
 
     Returns:
         ResultadoClasificacion con todos los campos poblados.
@@ -192,6 +216,15 @@ def clasificar(texto: str) -> ResultadoClasificacion:
         )
 
     monto, moneda = _extraer_monto(texto_limpio)
+
+    # Aplicar moneda forzada si el texto no especificó explícitamente ni USD ni COP.
+    # Regla: la expresión explícita en el texto siempre gana sobre la preferencia del usuario.
+    if moneda_forzada == "USD" and moneda == "COP":
+        texto_lower_chk = texto_limpio.lower()
+        tiene_usd = bool(re.search(r"\b(?:usd|d[oó]lares?|dolares?)\b", texto_lower_chk))
+        tiene_cop = bool(re.search(r"\b(?:pesos?|cop)\b", texto_lower_chk))
+        if not tiene_usd and not tiene_cop:
+            moneda = "USD"
 
     # Calcular monto en COP
     if moneda == "USD" and monto > 0:

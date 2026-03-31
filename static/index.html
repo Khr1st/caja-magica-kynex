@@ -293,6 +293,16 @@ main { flex: 1; display: flex; overflow: hidden; }
 .btn-modal-save { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-mid) 100%); color: white; border: none; }
 .btn-modal-cancel { background: transparent; border: 1px solid var(--border); color: var(--text2); }
 
+/* ─── Currency toggle ─── */
+.btn-moneda {
+  background: var(--green-dim); border: 1px solid var(--green); color: var(--green);
+  border-radius: var(--r-sm); padding: 0 14px; font-size: 12px; font-weight: 700;
+  cursor: pointer; height: 42px; flex-shrink: 0; transition: var(--transition);
+  letter-spacing: 0.8px; font-family: inherit;
+}
+.btn-moneda:hover { filter: brightness(1.2); }
+.btn-moneda.usd { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+
 /* ─── Mobile responsive ─── */
 @media (max-width: 900px) {
   .charts-grid { grid-template-columns: 1fr; }
@@ -369,6 +379,7 @@ main { flex: 1; display: flex; overflow: hidden; }
 
       <div class="input-area">
         <textarea id="inp" placeholder="Ej: mis papás me pasaron 900k..." rows="1"></textarea>
+        <button id="btn-moneda" class="btn-moneda" onclick="toggleMoneda()" title="Divisa activa — click para cambiar">COP</button>
         <button id="btn-send" onclick="enviar()">Enviar</button>
       </div>
     </section>
@@ -423,9 +434,7 @@ main { flex: 1; display: flex; overflow: hidden; }
         </div>
 
         <div class="actions-row">
-          <select id="sel-mes" class="btn-config" style="padding: 10px;" onchange="cambiarMes()">
-            <option value="">Mes Actual</option>
-          </select>
+          <input type="month" id="sel-mes" class="btn-config" style="padding: 8px 12px; font-family: inherit; font-size: 14px;" onchange="cambiarMes()">
           <button class="btn-export" id="btn-export" onclick="exportarExcel()">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
              Exportar Excel
@@ -568,11 +577,14 @@ Chart.defaults.font.family = 'Inter';
 })();
 
 // ─── State ───
-const S = { movimientos: [], resumen: null, mesActualFiltro: null, cargando: false };
+const S = { movimientos: [], resumen: null, mesActualFiltro: null, cargando: false, monedaForzada: 'COP' };
 
 // ─── Init ───
 async function init() {
-  await cargarMeses();
+  const d = new Date();
+  S.mesActualFiltro = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  document.getElementById('sel-mes').value = S.mesActualFiltro;
+  
   await refreshData();
   restaurarChat();
   registrarSW();
@@ -588,19 +600,10 @@ async function refreshData(silent = false) {
   ]);
 }
 
-async function cargarMeses() {
-  try {
-    const meses = await api('GET', '/api/meses');
-    const sel = document.getElementById('sel-mes');
-    if(meses && meses.length > 0) {
-      sel.innerHTML = meses.map(m => `<option value="${m}">${m}</option>`).join('');
-      S.mesActualFiltro = meses[0];
-    }
-  } catch(e){}
-}
-
 function cambiarMes() {
-  S.mesActualFiltro = document.getElementById('sel-mes').value;
+  const val = document.getElementById('sel-mes').value;
+  if(!val) return;
+  S.mesActualFiltro = val;
   refreshData();
 }
 
@@ -631,7 +634,7 @@ async function enviar() {
   const loadId = showLoading();
 
   try {
-    const r = await api('POST', '/api/movimiento', { texto: txt });
+    const r = await api('POST', '/api/movimiento', { texto: txt, moneda_forzada: S.monedaForzada });
     removeLoading(loadId); addMsg(r.mensaje, false); guardarChat(r.mensaje, false);
     if (r.ok) { await refreshData(); }
   } catch(e) {
@@ -916,6 +919,17 @@ async function exportarExcel() {
   } catch(e) {}
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Exportar Excel'; btn.disabled = false;
 }
+// ─── Selector de divisa ───
+function toggleMoneda() {
+  S.monedaForzada = S.monedaForzada === 'COP' ? 'USD' : 'COP';
+  const btn = document.getElementById('btn-moneda');
+  btn.textContent = S.monedaForzada;
+  btn.classList.toggle('usd', S.monedaForzada === 'USD');
+  btn.title = S.monedaForzada === 'USD'
+    ? 'Modo USD activo — los montos sin símbolo se tratarán como dólares'
+    : 'Modo COP activo — click para cambiar a USD';
+}
+
 document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
   const inp = document.getElementById('inp'); inp.value = c.dataset.text; inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); autoResize(inp);
 }));

@@ -33,6 +33,7 @@ CAJA_MINIMA_COP: int = int(os.environ.get("CAJA_MINIMA_COP", 800_000))
 
 class EntradaTexto(BaseModel):
     texto: str
+    moneda_forzada: Optional[str] = None  # 'COP' | 'USD'
 
 class ConfigUpdate(BaseModel):
     tasa_cop_usd: Optional[int] = None
@@ -82,7 +83,7 @@ async def root():
 
 @app.post("/api/movimiento")
 async def crear_movimiento(entrada: EntradaTexto):
-    resultado = clasificar(entrada.texto)
+    resultado = clasificar(entrada.texto, moneda_forzada=entrada.moneda_forzada)
 
     if resultado.error:
         return {"ok": False, "mensaje": resultado.error}
