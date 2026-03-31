@@ -476,7 +476,7 @@ main { flex: 1; display: flex; overflow: hidden; }
         <div class="metrics-grid" style="grid-template-columns: repeat(2, 1fr);">
            <div class="metric-card">
               <div class="m-icon ic-ing" style="background:var(--yellow-dim)">🔮</div>
-              <div class="m-label">Ingresos Esperados (Pendientes)</div>
+              <div class="m-label">Neto Proyectado (Pendiente)</div>
               <div class="m-value" id="val-proy-total" style="color:var(--yellow)">— COP</div>
               <div class="m-sub" id="sub-proy-count"></div>
            </div>
@@ -676,13 +676,14 @@ function renderCharts(data) {
   const pAlert = document.getElementById('proyecciones-alert');
   if(data.proyecciones && data.proyecciones.count > 0) {
     pAlert.style.display = 'flex';
+    const sgn = data.proyecciones.total >= 0 ? '+' : '';
     pAlert.innerHTML = `
       <div class="alert-proyeccion-icon">🔮</div>
       <div class="alert-proyeccion-content">
         <div class="alert-proyeccion-title">Proyecciones Futuras (${data.proyecciones.count} pendientes)</div>
         <div class="alert-proyeccion-text">Tienes estimaciones que cambiarán tu flujo neto.</div>
       </div>
-      <div class="alert-proyeccion-value">+${fmtCOP(data.proyecciones.total)}</div>
+      <div class="alert-proyeccion-value">${sgn}${fmtCOP(data.proyecciones.total)}</div>
     `;
   } else {
     pAlert.style.display = 'none';
@@ -691,21 +692,28 @@ function renderCharts(data) {
 
 // ─── Render UI ───
 function renderProyecciones(proy) {
-  document.getElementById('val-proy-total').textContent = '+' + fmtCOP(proy.total);
+  const sgnTotal = proy.total >= 0 ? '+' : '';
+  const valEl = document.getElementById('val-proy-total');
+  valEl.textContent = sgnTotal + fmtCOP(proy.total);
+  valEl.style.color = proy.total >= 0 ? 'var(--yellow)' : 'var(--red)';
   document.getElementById('sub-proy-count').textContent = proy.count + ' operacion(es) pendientes';
   
   const list = document.getElementById('proy-list');
   if (!proy.lista || !proy.lista.length) {
     list.innerHTML = `<div class="empty-state">
-      <p>No tienes proyecciones ni cuentas por cobrar registradas en este mes.</p></div>`;
+      <p>No tienes proyecciones ni cuentas por cobrar/pagar registradas en este mes.</p></div>`;
     return;
   }
   list.innerHTML = proy.lista.map(m => {
-    const amtStr = m.moneda === 'USD' ? '+$' + m.monto_original + ' USD' : '+' + fmtCOP(m.monto_cop);
+    const isEgr = m.tipo === 'proyeccion_egreso';
+    const sgn = isEgr ? '-' : '+';
+    const amtColor = isEgr ? 'var(--red)' : 'var(--yellow)';
+    const textBadge = isEgr ? 'A pagar' : 'A recibir';
+    const amtStr = m.moneda === 'USD' ? sgn + '$' + m.monto_original + ' USD' : sgn + fmtCOP(m.monto_cop);
     return `<div class="log-item">
-      <span class="badge badge-proyeccion">Esperado</span>
+      <span class="badge badge-proyeccion" style="background:var(--surface3);color:${amtColor}">${textBadge}</span>
       <span class="log-desc" title="${escapeHtml(m.descripcion)}">${escapeHtml(m.descripcion)}</span>
-      <span class="log-amt" style="color:var(--yellow)">${amtStr}</span>
+      <span class="log-amt" style="color:${amtColor}">${amtStr}</span>
       <button class="btn-del" onclick="eliminar('${m.id}')" title="Eliminar">×</button>
       </div>`;
   }).join('');
@@ -744,13 +752,25 @@ function renderLog() {
       <p>Aún no hay registros este mes</p></div>`;
     return;
   }
-  const tipos = { ingreso: 'Ingreso', egreso: 'Egreso', ahorro: 'Ahorro', proyeccion: 'Proyección' };
+  const tipos = { ingreso: 'Ingreso', egreso: 'Egreso', ahorro: 'Ahorro', proyeccion_ingreso: 'Proy. IN', proyeccion_egreso: 'Proy. OUT' };
   list.innerHTML = S.movimientos.map(m => {
-    const sign = m.tipo === 'ingreso' ? '+' : m.tipo === 'ahorro' ? '~' : '-';
-    const amtColor = m.tipo === 'ingreso' ? 'var(--green)' : m.tipo === 'proyeccion' ? 'var(--yellow)' : 'var(--red)';
+    const isEgrProy = m.tipo === 'proyeccion_egreso';
+    const isIngProy = m.tipo === 'proyeccion_ingreso';
+    const isProy = isEgrProy || isIngProy;
+    
+    let sign = '+'; let amtColor = 'var(--green)';
+    
+    if(m.tipo === 'egreso' || isEgrProy) { sign = '-'; amtColor = 'var(--red)'; }
+    else if(m.tipo === 'ahorro') { sign = '~'; amtColor = 'var(--blue)'; }
+    else if(isIngProy) { sign = '+'; amtColor = 'var(--yellow)'; }
+
     const amtStr = m.moneda === 'USD' ? sign + '$' + m.monto_original + ' USD' : sign + fmtCOP(m.monto_cop);
+    
+    let badgeClass = 'badge-' + m.tipo;
+    if (isProy) badgeClass = 'badge-proyeccion';
+
     return `<div class="log-item">
-      <span class="badge badge-${m.tipo}">${tipos[m.tipo] || m.tipo}</span>
+      <span class="badge ${badgeClass}">${tipos[m.tipo] || m.tipo}</span>
       <span class="log-desc" title="${escapeHtml(m.descripcion)}">${escapeHtml(m.descripcion)}</span>
       <span class="log-amt" style="color:${amtColor}">${amtStr}</span>
       <button class="btn-del" onclick="eliminar('${m.id}')" title="Eliminar">×</button>

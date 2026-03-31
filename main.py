@@ -257,9 +257,15 @@ async def analytics(mes: str = Query(default=None)):
     # Proyecciones
     proyecciones = [m for m in del_mes if m.get("es_proyeccion")]
     proy_por_cat: dict[str, int] = {}
+    proy_total = 0
     for m in proyecciones:
         cat = m.get("categoria", "otro")
-        proy_por_cat[cat] = proy_por_cat.get(cat, 0) + m.get("monto_cop", 0)
+        monto = m.get("monto_cop", 0)
+        is_egreso = m.get("tipo") == "proyeccion_egreso"
+        monto_sgn = -monto if is_egreso else monto
+        
+        proy_por_cat[cat] = proy_por_cat.get(cat, 0) + monto_sgn
+        proy_total += monto_sgn
 
     # Radar de categorías (todas)
     todas_cats = list(set(list(ing_por_cat.keys()) + list(egr_por_cat.keys())))
@@ -281,7 +287,7 @@ async def analytics(mes: str = Query(default=None)):
         "proyecciones": {
             "lista": proyecciones,
             "por_categoria": proy_por_cat,
-            "total": sum(proy_por_cat.values()),
+            "total": proy_total,
             "count": len(proyecciones),
         },
         "radar": {
