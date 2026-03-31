@@ -1,5 +1,5 @@
 """
-Generador de reportes Excel con identidad visual KYNEX Ventures.
+Generador de reportes Excel para Caja Mágica.
 Paleta Emerald Obsidian: verde bosque sobre fondos claros,
 celdas editables en azul, totales en amarillo suave.
 """
@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
 from openpyxl.utils import get_column_letter
 
-# ─── Paleta Kent ────────────────────────────────────────────────────────────
+# ─── Paleta Caja Mágica ─────────────────────────────────────────────────────
 
 COLOR_HEADER_BG   = "1A4731"
 COLOR_HEADER_FONT = "FFFFFF"
@@ -89,7 +89,7 @@ def _auto_col_width(ws, min_w: int = 10, max_w: int = 45) -> None:
 
 def generar_excel(movimientos: list, mes: str) -> str:
     """
-    Genera archivo Excel con 4 hojas y paleta KYNEX.
+    Genera archivo Excel con 4 hojas y paleta Caja Mágica.
 
     Args:
         movimientos: Lista de dicts de movimientos filtrados por mes.
@@ -115,7 +115,7 @@ def generar_excel(movimientos: list, mes: str) -> str:
 
     # Subtítulo
     ws1.merge_cells("A2:I2")
-    ws1["A2"] = f"KYNEX Ventures · Kent Díaz · Exportado: {fecha_export}"
+    ws1["A2"] = f"Caja Mágica · Tu tesorería personal · Exportado: {fecha_export}"
     ws1["A2"].font = Font(name=FONT_NAME, italic=True, size=9, color="666666")
     ws1["A2"].alignment = Alignment(horizontal="center")
 
@@ -264,11 +264,11 @@ def generar_excel(movimientos: list, mes: str) -> str:
     supuestos = [
         ("Parámetro", "Valor"),
         ("Tasa COP/USD", 4200),
-        ("Precio hora consultoría (USD)", 25),
-        ("Horas facturables/semana (máx real: 10h)", 10),
+        ("Precio hora servicios (USD)", 25),
+        ("Horas facturables/semana", 10),
         ("Caja mínima COP (umbral de alerta)", 800000),
-        ("% reinversión primeros ingresos (regla 50/50)", 50),
-        ("Objetivo ingreso mensual USD (meta Oklahoma)", 2000),
+        ("% reinversión de ingresos", 50),
+        ("Objetivo ingreso mensual USD", 2000),
     ]
 
     for i, (label, value) in enumerate(supuestos):

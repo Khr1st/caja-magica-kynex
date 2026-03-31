@@ -1,6 +1,7 @@
 """
 Caja Mágica — API de tesorería personal conversacional.
-Backend FastAPI con persistencia JSON y clasificación NLP.
+Backend FastAPI con persistencia JSON, clasificación NLP,
+y auto-sincronización Excel en tiempo real.
 """
 
 import os
@@ -18,7 +19,7 @@ from pydantic import BaseModel
 from clasificador import clasificar
 from excel_export import generar_excel
 
-app = FastAPI(title="Caja Mágica", version="1.0.0")
+app = FastAPI(title="Caja Mágica", version="1.1.0")
 
 BASE_DIR = Path(__file__).parent
 DATA_FILE = BASE_DIR / "data" / "movimientos.json"
@@ -61,6 +62,17 @@ def _mes_actual() -> str:
     return datetime.now().strftime("%Y-%m")
 
 
+def _sync_excel(mes: str | None = None) -> None:
+    """Auto-regenera el Excel cada vez que hay un cambio en movimientos."""
+    mes = mes or _mes_actual()
+    movimientos = cargar_movimientos()
+    del_mes = [m for m in movimientos if m.get("mes") == mes]
+    try:
+        generar_excel(del_mes, mes)
+    except Exception:
+        pass  # Non-critical — no debe bloquear la operación principal
+
+
 # ─── Endpoints ──────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -93,6 +105,7 @@ async def crear_movimiento(entrada: EntradaTexto):
     movimientos = cargar_movimientos()
     movimientos.append(movimiento)
     guardar_movimientos(movimientos)
+    _sync_excel()
 
     return {"ok": True, "movimiento": movimiento, "mensaje": resultado.mensaje_respuesta}
 
@@ -174,6 +187,7 @@ async def eliminar_movimiento(mov_id: str):
         raise HTTPException(status_code=404, detail="Movimiento no encontrado")
 
     guardar_movimientos(movimientos)
+    _sync_excel()
     return {"ok": True, "eliminado": mov_id}
 
 
@@ -190,6 +204,99 @@ async def exportar(mes: str = Query(default=None)):
         filename=f"CajaMagica_{mes}.xlsx",
         headers={"Content-Disposition": f'attachment; filename="CajaMagica_{mes}.xlsx"'},
     )
+
+
+@app.get("/api/analytics")
+async def analytics(mes: str = Query(default=None)):
+    """Datos estructurados para gráficos: barras, torta, radar, tendencia diaria."""
+    mes = mes or _mes_actual()
+    movimientos = cargar_movimientos()
+    del_mes = [m for m in movimientos if m.get("mes") == mes]
+
+    # Por tipo (para barras)
+    por_tipo: dict[str, int] = {}
+    for m in del_mes:
+        t = m.get("tipo", "otro")
+        por_tipo[t] = por_tipo.get(t, 0) + m.get("monto_cop", 0)
+
+    # Por categoría (para torta + radar)
+    por_categoria: dict[str, int] = {}
+    for m in del_mes:
+        cat = m.get("categoria", "otro")
+        por_categoria[cat] = por_categoria.get(cat, 0) + m.get("monto_cop", 0)
+
+    # Egresos por categoría (para torta de gastos)
+    egresos_por_cat: dict[str, int] = {}
+    for m in del_mes:
+        if m.get("tipo") in ("egreso",):
+            cat = m.get("categoria", "otro")
+            egresos_por_cat[cat] = egresos_por_cat.get(cat, 0) + m.get("monto_cop", 0)
+
+    # Tendencia diaria acumulada (para gráfico de líneas)
+    daily: dict[str, dict[str, int]] = {}
+    for m in sorted(del_mes, key=lambda x: x.get("timestamp", "")):
+        ts = m.get("timestamp", "")
+        day = ts[:10] if len(ts) >= 10 else "unknown"
+        if day not in daily:
+            daily[day] = {"ingresos": 0, "egresos": 0}
+        if m.get("tipo") == "ingreso":
+            daily[day]["ingresos"] += m.get("monto_cop", 0)
+        elif m.get("tipo") in ("egreso", "ahorro"):
+            daily[day]["egresos"] += m.get("monto_cop", 0)
+
+    # Convertir a series para Chart.js
+    dias = sorted(daily.keys())
+    ingresos_diarios = [daily[d]["ingresos"] for d in dias]
+    egresos_diarios = [daily[d]["egresos"] for d in dias]
+
+    # Acumulado
+    acumulado = []
+    running = 0
+    for d in dias:
+        running += daily[d]["ingresos"] - daily[d]["egresos"]
+        acumulado.append(running)
+
+    # Proyecciones
+    proyecciones = [m for m in del_mes if m.get("es_proyeccion")]
+    proy_por_cat: dict[str, int] = {}
+    for m in proyecciones:
+        cat = m.get("categoria", "otro")
+        proy_por_cat[cat] = proy_por_cat.get(cat, 0) + m.get("monto_cop", 0)
+
+    # Radar de categorías (todas)
+    todas_cats = list(set(
+        list(por_categoria.keys()) + list(egresos_por_cat.keys())
+    ))
+
+    return {
+        "mes": mes,
+        "por_tipo": por_tipo,
+        "por_categoria": por_categoria,
+        "egresos_por_categoria": egresos_por_cat,
+        "tendencia": {
+            "dias": dias,
+            "ingresos": ingresos_diarios,
+            "egresos": egresos_diarios,
+            "acumulado": acumulado,
+        },
+        "proyecciones": {
+            "por_categoria": proy_por_cat,
+            "total": sum(proy_por_cat.values()),
+            "count": len(proyecciones),
+        },
+        "radar_categorias": todas_cats,
+        "total_movimientos": len(del_mes),
+    }
+
+
+@app.get("/api/meses")
+async def listar_meses():
+    """Lista todos los meses que tienen movimientos, para el selector de mes."""
+    movimientos = cargar_movimientos()
+    meses = sorted(set(m.get("mes", "") for m in movimientos if m.get("mes")), reverse=True)
+    if not meses or _mes_actual() not in meses:
+        meses.insert(0, _mes_actual())
+    return meses
 
 
 @app.get("/api/config")
@@ -209,7 +316,7 @@ async def update_config(cfg: ConfigUpdate):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "1.0.0", "mes_actual": _mes_actual()}
+    return {"status": "ok", "version": "1.1.0", "mes_actual": _mes_actual()}
 
 
 # ─── Static files (DEBE ir al final) ───────────────────────────────────────

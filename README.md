@@ -1,7 +1,7 @@
-# Caja Mágica — KYNEX Ventures
+# Caja Mágica
 
-> Tesorería personal conversacional de Kent Díaz.  
-> Registro de ingresos y egresos con lenguaje natural → clasificación automática → Excel con identidad visual.
+> Tu tesorería personal inteligente.  
+> Registra ingresos y egresos con lenguaje natural → clasificación automática → Excel + visualización en tiempo real.
 
 ## Stack
 
@@ -9,8 +9,9 @@
 |------|-----------|
 | Backend | Python 3.11+ · FastAPI · Uvicorn |
 | Frontend | HTML + CSS + JS vanilla (single-file) |
-| Persistencia | JSON local (`data/movimientos.json`) |
-| Excel | openpyxl — paleta KYNEX |
+| Gráficos | Chart.js (CDN) — barras, torta, radar |
+| Persistencia | JSON local (`data/movimientos.json`) + auto-sync Excel |
+| Excel | openpyxl — 4 hojas con estilo profesional |
 | NLP | regex + heurísticas en Python puro |
 | Deploy | Railway.app (Nixpacks) |
 | Mobile | PWA instalable con Service Worker |
@@ -22,9 +23,9 @@ caja-magica/
 ├── main.py             # API FastAPI
 ├── clasificador.py     # Motor NLP
 ├── excel_export.py     # Generador Excel 4 hojas
-├── data/               # Persistencia JSON
+├── data/               # Persistencia JSON + Excel auto-sync
 ├── static/
-│   ├── index.html      # Frontend completo
+│   ├── index.html      # Frontend con dashboard + gráficos
 │   ├── manifest.json   # PWA manifest
 │   ├── sw.js           # Service Worker
 │   └── icons/          # SVG icons
@@ -45,7 +46,7 @@ python main.py
 
 - `mis papás me pasaron 900k` → ingreso/mesada
 - `gasté 40k en almuerzo y bus` → egreso/alimentación
-- `facturé 2 horas a $25 USD` → ingreso/consultoría (convierte a COP)
+- `facturé 2 horas a $25 USD` → ingreso/freelance (convierte a COP)
 - `pasé 150k a IBKR` → ahorro/ibkr
 - `voy a facturar 5 horas el próximo mes` → proyección
 
@@ -57,4 +58,4 @@ python main.py
 
 ## Licencia
 
-Uso personal — Kent Díaz / KYNEX Ventures © 2025
+MIT
