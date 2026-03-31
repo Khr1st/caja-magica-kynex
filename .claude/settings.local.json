@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(ls:*)",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "mcp__stitch__list_projects",
+      "mcp__stitch__list_screens"
     ]
   }
 }

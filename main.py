@@ -50,6 +50,7 @@ except Exception:
 class EntradaTexto(BaseModel):
     texto: str
     moneda_forzada: Optional[str] = None  # 'COP' | 'USD'
+    mes_forzado: Optional[str] = None     # 'YYYY-MM'
 
 class ConfigUpdate(BaseModel):
     tasa_cop_usd: Optional[int] = None
@@ -123,10 +124,23 @@ async def crear_movimiento(entrada: EntradaTexto):
     if resultado.error:
         return {"ok": False, "mensaje": resultado.error}
 
+    mes_target = entrada.mes_forzado or _mes_actual()
+    # Construir un pseudo-timestamp para que respete el mes forzado (usamos el día 1 por defecto 
+    # o el día actual si el mes es el mismo que el real).
+    now = datetime.now()
+    if mes_target == _mes_actual():
+        ts_target = now.isoformat()
+    else:
+        try:
+            y, m = map(int, mes_target.split("-"))
+            ts_target = datetime(y, m, 15, 12, 0).isoformat()  # Día 15 por defecto para no errar
+        except ValueError:
+            ts_target = now.isoformat()
+
     movimiento = {
         "id": str(uuid.uuid4()),
-        "timestamp": datetime.now().isoformat(),
-        "mes": _mes_actual(),
+        "timestamp": ts_target,
+        "mes": mes_target,
         "texto_original": entrada.texto,
         "tipo": resultado.tipo,
         "categoria": resultado.categoria,

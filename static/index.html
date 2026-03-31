@@ -386,11 +386,14 @@ main { flex: 1; display: flex; overflow: hidden; }
 
     <!-- ═══ DASHBOARD PANEL ═══ -->
     <section class="panel-dash" id="panel-dash">
-      <div class="dash-tabs">
-        <div class="dash-tab active" onclick="switchTab('tab-operaciones', this)">Operaciones</div>
-        <div class="dash-tab" onclick="switchTab('tab-analitica', this)">Analítica & Flujo</div>
-        <div class="dash-tab" onclick="switchTab('tab-proyecciones', this)">Proyecciones</div>
-        <div class="dash-tab" onclick="switchTab('tab-calendario', this)">Calendario</div>
+      <div class="dash-tabs" style="justify-content: space-between; align-items: center; overflow-x: auto;">
+        <div style="display: flex; gap: 15px;">
+          <div class="dash-tab active" onclick="switchTab('tab-operaciones', this)">Operaciones</div>
+          <div class="dash-tab" onclick="switchTab('tab-analitica', this)">Analítica & Flujo</div>
+          <div class="dash-tab" onclick="switchTab('tab-proyecciones', this)">Proyecciones</div>
+          <div class="dash-tab" onclick="switchTab('tab-calendario', this)">Calendario</div>
+        </div>
+        <input type="month" id="sel-mes" class="btn-config" style="padding: 6px 10px; font-family: inherit; font-size: 13px; border:none; background: transparent; cursor: pointer; color: var(--accent-light);" onchange="cambiarMes()" title="Navegar por meses libremente">
       </div>
 
       <!-- TABS: OPERACIONES -->
@@ -433,8 +436,7 @@ main { flex: 1; display: flex; overflow: hidden; }
           <span id="sem-msg">Sin movimientos aún</span>
         </div>
 
-        <div class="actions-row">
-          <input type="month" id="sel-mes" class="btn-config" style="padding: 8px 12px; font-family: inherit; font-size: 14px;" onchange="cambiarMes()">
+        <div class="actions-row" style="justify-content: flex-end;">
           <button class="btn-export" id="btn-export" onclick="exportarExcel()">
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
              Exportar Excel
@@ -634,7 +636,16 @@ async function enviar() {
   const loadId = showLoading();
 
   try {
-    const r = await api('POST', '/api/movimiento', { texto: txt, moneda_forzada: S.monedaForzada });
+    const payload = { texto: txt, moneda_forzada: S.monedaForzada };
+    
+    // Solo forzamos el mes si no estamos viendo el mes actual del sistema
+    const d = new Date();
+    const actual = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    if (S.mesActualFiltro && S.mesActualFiltro !== actual) {
+      payload.mes_forzado = S.mesActualFiltro;
+    }
+    
+    const r = await api('POST', '/api/movimiento', payload);
     removeLoading(loadId); addMsg(r.mensaje, false); guardarChat(r.mensaje, false);
     if (r.ok) { await refreshData(); }
   } catch(e) {
