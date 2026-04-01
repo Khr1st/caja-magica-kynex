@@ -63,13 +63,12 @@ _CAPA_ESPERA = re.compile(
 
 # ── Capa 3: Futuro desde tercera persona (me van a pagar, el cliente pagará) ──
 _CAPA_TERCERO = re.compile(
-    r"\bme van a (?:pagar|depositar|transferir|cobrar|mandar|pasar|enviar)\b|"
-    r"\bvan a (?:pagarme|cobrarme|depositarme|mandarme|transferirme)\b|"
-    r"\bme (?:pagarán|depositarán|transferirán|cobrarán|mandarán|llegarán|pasarán)\b|"
-    r"\bme (?:pagará[n]?|depositará[n]?|transferirá[n]?|cobrará[n]?)\b|"
+    r"\bme va[n]? a (?:pagar|depositar|transferir|cobrar|mandar|pasar|enviar)\b|"
+    r"\bva[n]? a (?:pagarme|cobrarme|depositarme|mandarme|transferirme)\b|"
+    r"\bme (?:pagarán?|depositarán?|transferirán?|cobrarán?|mandarán?|llegarán?|pasarán?)\b|"
     r"\b(?:el |mi )?cliente (?:va a pagar|pagará|me va a pagar|me pagará|piensa pagar)\b|"
     r"\b(?:el |mi )?(?:jefe|empresa|empleador).{0,20}(?:va a pagar|pagará|me pagará)\b|"
-    r"\b(?:pap[aá]|mam[aá]|padres?|familia).{0,35}(?:va[n]? a (?:mandar|pasar|depositar|transferir|enviar))\b|"
+    r"\b(?:pap[aá][s]?|mam[aá][s]?|padres?|familia).{0,35}(?:va[n]? a (?:mandar|pasar|depositar|transferir|enviar))\b|"
     r"\bme (?:van a caer|están por llegar|está[n]? por depositar)\b|"
     r"\bme (?:está[n]? (?:debiendo|quedando debiendo)|siguen debiendo|quedan debiendo)\b",
     re.IGNORECASE,
@@ -105,11 +104,11 @@ _CAPA_PENDIENTE = re.compile(
 
 # ── Capa 6: Negación de hecho pasado = pendiente futuro ──
 _CAPA_NEGACION = re.compile(
-    r"\b(?:aún|todav[ií]a)\b.{0,20}(?:no\b.{0,15})?(?:he |haber )?(?:pagado|cobrado|recibido|facturado|transferido|llegado)\b|"
+    r"\b(?:aún|todav[ií]a)\b.{0,20}(?:no\b.{0,15})?(?:he |haber )?(?:pagado?|cobrado?|recibido?|facturado?|transferido?|llegado?)\b|"
     r"\bno (?:he|lo he|la he|los he|las he) (?:pagado|cobrado|recibido|facturado|transferido)\b|"
-    r"\bsin (?:haber )?(?:pagar|cobrar|saldar|liquidar|facturar)\b|"
+    r"\bsin (?:haber )?(?:pagado?|cobrado?|saldado?|liquidado?|facturado?)\b|"
     r"\bfalta(?:n)? (?:por )?(?:pagar|cobrar)\b|"
-    r"\bno ha(?:n)? (?:pagado|depositado|transferido|llegado|caído)\b|"
+    r"\bno ha(?:n)? (?:pagado|depositado|transferido|llegado|ca[ií]do)\b|"
     r"\bno se ha (?:pagado|cobrado|depositado)\b",
     re.IGNORECASE,
 )
@@ -117,8 +116,9 @@ _CAPA_NEGACION = re.compile(
 # ── Capa 7: Condicionales financieros (si X → Y dinero) ──
 _CAPA_CONDICIONAL = re.compile(
     r"\bsi (?:vendo|cobro|factur[oa]|recibo|llega|me pagan|consigo|cierro|firma[n]?|aprueba[n]?|entrega[n]?)\b|"
-    r"\bcuando (?:llegue|reciba|paguen|me paguen|cobre|facture|venda|depositen|confirmen|entre el)\b|"
-    r"\bapenas (?:llegue|reciba|paguen|me paguen|cobre|venda|confirmen|entre)\b|"
+    r"\bcuando (?:llegue|reciba|paguen|me paguen|cobre|facture|venda|depositen|confirmen|confirme|aprueben?|autoricen?|entre el|me confirmen?)\b|"
+    r"\bcuando (?:el |mi )?(?:cliente|empresa|proveedor|jefe).{0,25}(?:confirme|pague|apruebe|autorice|deposite|firme)\b|"
+    r"\bapenas (?:llegue|reciba|paguen|me paguen|cobre|venda|confirmen|confirme|entre)\b|"
     r"\btan pronto (?:como )?(?:llegue|reciba|paguen|entre|cobren)\b|"
     r"\bde (?:llegar|cobrar|vender|facturar|recibir).{0,20}\bganar[ía]*\b",
     re.IGNORECASE,
@@ -150,14 +150,14 @@ _CAPAS_PROYECCION: list[tuple[str, re.Pattern]] = [
 
 # ── Scorer de dirección INGRESO ──────────────────────────────────────────────
 _DIR_INGRESO = re.compile(
-    r"\bcobrar\b|\bcobro\b|\bcobr[eé]\b|"
+    r"\bcobrar\b|\bcobr[eé]\b|"
     r"\bfacturar\b|\bfactur[eé]\b|"
     r"\brecibir\b|\brecib[ií]\b|"
     r"\bvender\b|\bvend[ií]\b|\bventa[s]?\b|"
     r"\bganar\b|\bgano\b|\bgan[eé]\b|"
     r"\bingreso[s]?\b|\bingresar\b|"
-    r"\bme van a (?:pagar|mandar|depositar|pasar|enviar)\b|"
-    r"\bme (?:pagarán|mandará[n]?|depositarán|pasarán)\b|"
+    r"\bme va[n]? a (?:pagar|mandar|depositar|pasar|enviar)\b|"
+    r"\bme (?:pagarán?|mandará[n]?|depositarán?|pasarán?)\b|"
     r"\bme deben\b|\bdeben pagarme\b|"
     r"\bcliente.{0,20}(?:pag|cobr)\b|"
     r"\bbono\b|\bcomisi[oó]n\b|\bhonorario[s]?\b|\bdividendo[s]?\b|"
@@ -170,7 +170,8 @@ _DIR_INGRESO = re.compile(
 
 # ── Scorer de dirección EGRESO ───────────────────────────────────────────────
 _DIR_EGRESO = re.compile(
-    r"\bpagar\b|\bpago\b|\bpagu[eé]\b|"
+    # "pagar" con dos lookbehinds fijos para excluir "va a pagar" y "van a pagar"
+    r"(?<!va a )(?<!van a )\bpagar\b|\bpagu[eé]\b|"
     r"\bcomprar\b|\bcompr[eé]\b|"
     r"\bgastar\b|\bgast[eé]\b|"
     r"\begreso[s]?\b|\bcosto[s]?\b|\bgasto[s]?\b|"
@@ -180,7 +181,10 @@ _DIR_EGRESO = re.compile(
     r"\bdeuda[s]?\b|\bpr[eé]stamo\b|\bcr[eé]dito\b|\btarjeta\b|"
     r"\bsuscripci[oó]n\b|\brenovaci[oó]n\b|\bcuota[s]?\b|\bmensualidad\b|"
     r"\bmulta\b|\bimpuesto[s]?\b|\bseguro\b|\bp[oó]liza\b|"
-    r"\bmatr[ií]cula\b|\barancel\b|\bcargo\b|"
+    r"\bmatr[ií]cula\b|\barancel\b|"
+    r"\b(?:d[eé]bito|debito) (?:autom[aá]tico|recurrente|programado)\b|"
+    r"\bcobro de (?:spotify|netflix|disney|amazon|youtube|gym|gimnasio|apple|google|microsoft)\b|"
+    r"\bgym\b|\bgimnasio\b|"
     r"\bme van a cobrar\b|\bme cobrará[n]?\b",
     re.IGNORECASE,
 )
@@ -189,11 +193,11 @@ _DIR_EGRESO = re.compile(
 _CATS_PROYECCION: list[tuple[str, str]] = [
     ("freelance",       r"\bfreelance\b|\bcobrar\b|\bfacturar\b|\bconsultor[ií]a\b|\bservicio[s]?\b|\bproyecto\b|\bcliente\b|\bhonorario\b|\bcontrato\b|\bdesarroll[oa]\b|\bdise[ñn]o\b|\bmentor[ií]a\b"),
     ("ventas_digitales",r"\bventa digital\b|\bvender\b|\bplantilla\b|\btemplate\b|\bproducto digital\b|\btienda\b|\becommerce\b|\bcurso\b|\bebook\b"),
-    ("mesada",          r"\bpap[aá]\b|\bmam[aá]\b|\bpadres?\b|\bfamilia\b|\bmesada\b"),
+    ("mesada",          r"\bpap[aá][s]?\b|\bmam[aá][s]?\b|\bpadres?\b|\bfamilia\b|\bmesada\b"),
     ("arriendo",        r"\barriendo\b|\balquiler\b|\bhipoteca\b|\brenta del\b"),
     ("servicios_fijos", r"\binternet\b|\bcelular\b|\bagua\b|\bluz\b|\bgas\b|\belectricidad\b|\bservicio[s]? público[s]?\b"),
     ("deuda",           r"\bdeuda\b|\bpr[eé]stamo\b|\bcr[eé]dito\b|\bcuota\b|\bmensualidad\b|\babono\b|\bcuotas\b"),
-    ("suscripcion",     r"\bsuscripci[oó]n\b|\brenovaci[oó]n\b|\bmembres[ií]a\b|\bcargo (?:automático|mensual|anual)\b"),
+    ("suscripcion",     r"\bsuscripci[oó]n\b|\brenovaci[oó]n\b|\bmembres[ií]a\b|\bcargo (?:autom[aá]tico|mensual|anual)\b|\b(?:d[eé]bito|debito) autom[aá]tico\b|\bspotify\b|\bnetflix\b|\bdisney\b|\byoutube\b|\bgym\b|\bgimnasio\b|\bapple\b|\bgoogle\b"),
     ("tc_pago",         r"\btarjeta\b|\btc\b|\bcr[eé]dito\b"),
     ("ibkr",            r"\bibkr\b|\betf\b|\bacciones\b|\binversi[oó]n\b|\bmercado de valores\b"),
     ("nu",              r"\bnu\b|\bcajita\b|\bnubank\b"),
@@ -302,7 +306,7 @@ _REGLAS: list[dict] = [
     },
     {
         "nombre": "ingreso_mesada",
-        "pattern": r"pap[aá]|mam[aá]|\bpapa\b|\bmama\b|padres|familia|mesada",
+        "pattern": r"pap[aá][s]?|mam[aá][s]?|\bpapa\b|\bmama\b|padres|familia|mesada",
         "tipo": "ingreso",
         "categoria": "mesada",
         "mensaje": "Ingreso familiar registrado.",
