@@ -57,9 +57,14 @@ def execute_migrations_if_needed():
             try:
                 with open(json_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    conf_map = {"alta": 100, "media": 50, "baja": 10}
                     for d in data:
+                        raw_conf = d.get("confianza", 100)
+                        if isinstance(raw_conf, str):
+                            d["confianza"] = conf_map.get(raw_conf.lower(), 100)
                         mov = MovimientoDB(**d)
                         db.merge(mov)
                     db.commit()
-            except Exception:
+            except Exception as e:
+                print(f"Error migrating JSON data: {e}")
                 db.rollback()

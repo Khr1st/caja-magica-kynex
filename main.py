@@ -137,6 +137,9 @@ async def crear_movimiento(entrada: EntradaTexto):
         except ValueError:
             ts_target = now.isoformat()
 
+    conf_map = {"alta": 100, "media": 50, "baja": 10}
+    val_confianza = conf_map.get(resultado.confianza, 100) if isinstance(resultado.confianza, str) else resultado.confianza
+
     movimiento = {
         "id": str(uuid.uuid4()),
         "timestamp": ts_target,
@@ -149,7 +152,7 @@ async def crear_movimiento(entrada: EntradaTexto):
         "monto_original": resultado.monto_original,
         "moneda": resultado.moneda,
         "es_proyeccion": resultado.es_proyeccion,
-        "confianza": resultado.confianza,
+        "confianza": val_confianza,
     }
 
     guardar_movimiento_db(movimiento)
